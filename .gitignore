@@ -27,3 +27,5 @@ fruit_data/
 .env
 *.db
 *.sqlite
+yolo_fruit_data/_removed/
+yolo_fruit_data/_removed/
