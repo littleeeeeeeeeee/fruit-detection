@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.projenv/
+
+# IDE
+.idea/
+
+# 训练产物
+runs/
+mlruns/
+mlflow.db
+*.cache
+
+# 数据集（交给 DVC 管理，不进 Git）
+yolo_fruit_data/images/
+yolo_fruit_data/labels/
+fruit_data/
+
+# 权重文件（但推理要用的 best.pt 保留）
+*.pt
+!models/best.pt
+
+# 本地配置与数据库
+.env
+*.db
+*.sqlite

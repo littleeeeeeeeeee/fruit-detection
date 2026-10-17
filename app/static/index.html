@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>水果检测</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 860px; margin: 0 auto; padding: 24px; }
+  h2 { margin-top: 32px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+  button { padding: 6px 14px; cursor: pointer; }
+  .stage { position: relative; display: inline-block; max-width: 100%; margin-top: 8px; }
+  .stage img { max-width: 100%; display: block; border-radius: 6px; }
+  .overlay { position: absolute; inset: 0; }
+  .box { position: absolute; border: 2px solid #ff3b30; border-radius: 2px; }
+  .box span { position: absolute; top: -20px; left: -2px; background: #ff3b30; color: #fff;
+              font-size: 12px; padding: 1px 5px; white-space: nowrap; border-radius: 2px; }
+  ul { padding-left: 20px; line-height: 1.6; }
+  .hint { color: #666; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>水果检测</h1>
+
+<h2>单张图片</h2>
+<div class="row">
+  <input type="file" id="single" accept="image/*">
+  <button id="singleBtn">识别</button>
+  <span class="hint" id="singleMsg"></span>
+</div>
+<div class="stage" id="stage" hidden>
+  <img id="preview" alt="">
+  <div class="overlay" id="overlay"></div>
+</div>
+<ul id="singleList"></ul>
+
+<h2>批量图片</h2>
+<div class="row">
+  <input type="file" id="batch" accept="image/*" multiple>
+  <button id="batchBtn">识别全部</button>
+  <span class="hint" id="batchMsg"></span>
+</div>
+<ul id="batchList"></ul>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function boxHtml(d, w, h) {
+  const [x1, y1, x2, y2] = d.box;
+  const style = `left:${x1 / w * 100}%;top:${y1 / h * 100}%;` +
+                `width:${(x2 - x1) / w * 100}%;height:${(y2 - y1) / h * 100}%`;
+  return `<div class="box" style="${style}">
+            <span>${d.class_name} ${(d.confidence * 100).toFixed(1)}%</span>
+          </div>`;
+}
+
+$('singleBtn').onclick = async () => {
+  const f = $('single').files[0];
+  if (!f) { $('singleMsg').textContent = '请先选择图片'; return; }
+  $('singleMsg').textContent = '识别中…';
+  const fd = new FormData();
+  fd.append('file', f);
+  const res = await fetch('/api/detect', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (!res.ok) { $('singleMsg').textContent = data.detail || '识别失败'; return; }
+
+  $('singleMsg').textContent = `${data.count} 个目标，耗时 ${data.elapsed_ms} ms`;
+  const img = $('preview');
+  img.src = URL.createObjectURL(f);
+  $('stage').hidden = false;
+  img.onload = () => {
+    $('overlay').innerHTML = data.detections
+      .map((d) => boxHtml(d, img.naturalWidth, img.naturalHeight)).join('');
+  };
+  $('singleList').innerHTML = data.detections.length
+    ? data.detections.map((d) =>
+        `<li>${d.class_name} — 置信度 ${(d.confidence * 100).toFixed(1)}% — ` +
+        `坐标 [${d.box.map((n) => n.toFixed(0)).join(', ')}]</li>`).join('')
+    : '<li>未检测到目标</li>';
+};
+
+$('batchBtn').onclick = async () => {
+  const files = $('batch').files;
+  if (!files.length) { $('batchMsg').textContent = '请先选择图片'; return; }
+  $('batchMsg').textContent = `正在识别 ${files.length} 张…`;
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+  const res = await fetch('/api/detect/batch', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (!res.ok) { $('batchMsg').textContent = data.detail || '识别失败'; return; }
+
+  $('batchMsg').textContent = `${data.total_images} 张图片，共 ${data.total_detections} 个目标`;
+  $('batchList').innerHTML = data.results.map((r) => {
+    const items = r.detections.length
+      ? r.detections.map((d) =>
+          `<li>${d.class_name} ${(d.confidence * 100).toFixed(1)}%</li>`).join('')
+      : '<li>未检测到目标</li>';
+    return `<li><b>${r.filename}</b>（${r.count} 个）<ul>${items}</ul></li>`;
+  }).join('');
+};
+</script>
+</body>
+</html>

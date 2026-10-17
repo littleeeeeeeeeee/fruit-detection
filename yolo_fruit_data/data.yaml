@@ -1,0 +1,10 @@
+path: C:/Users/21555/PycharmProjects/pythonProject/yolo_fruit_data
+train: images/train
+val: images/val
+test: images/test
+
+nc: 3
+names:
+  0: apple
+  1: banana
+  2: orange
