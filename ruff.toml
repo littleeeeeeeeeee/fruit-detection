@@ -1,0 +1,7 @@
+target-version = "py312"
+line-length = 100
+
+[lint]
+# Pycodestyle errors/warnings + Pyflakes. Keep the rule set focused so CI
+# catches real issues without fighting framework idioms (e.g. FastAPI File(...)).
+select = ["E4", "E7", "E9", "F"]

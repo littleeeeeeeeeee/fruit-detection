@@ -13,6 +13,12 @@
 | baseline-v1 | v1（208 张，未清洗） | yolov8n | 50 | 0.913 | 0.657 | 基线，默认损失权重，SGD lr0=0.01 |
 | improved-v2 | v2（166 张，已清洗） | yolov8n | 100（早停于 93） | **0.930** | **0.700** | 剔除 42 张低分辨率样本，训练更充分 |
 
+> 表中指标是 **best checkpoint** 的值（baseline 为 epoch 36，improved-v2 为 epoch 73），
+> 与 Ultralytics 按 fitness（主要看 mAP50-95）选出的 best.pt 对应。
+> MLflow 的最终 `mAP50` 指标记录最后一个 epoch（improved-v2 为 0.923）：
+> 单看 mAP50 的最大值会出现在 epoch 88（0.932），但该 epoch 的 mAP50-95 只有 0.674，
+> 不是选中的 best checkpoint。
+
 每个 run 记录的内容：
 
 - **参数**：model / epochs / imgsz / batch / optimizer / lr0 / box / cls / dfl / patience / dataset_version
@@ -27,6 +33,15 @@
 | apple | 0.974 | 0.967 |
 | banana | 0.770 | 0.837 |
 | orange | 0.995 | 0.988 |
+
+## 优化指标及理由
+
+主要优化指标：**mAP50** 和 **mAP50-95**。
+
+- mAP50 是 IoU=0.5 时各类别 AP 的平均值，衡量“是否检测到正确类别和大致位置”，与页面展示的检测框场景最直接相关；
+- mAP50-95 对 IoU 0.5–0.95 取平均，更严格地衡量定位精度，避免只追求“框住大概位置”；
+- 本项目只有 3 类且验证集仅 32 张，单类指标容易抖动，因此用整体 mAP 作为主选型指标，同时单独看 banana（基线弱项）的类别指标；
+- 不单独用 accuracy：目标检测是密集预测任务，没有简单的分类 accuracy，mAP 更合适。
 
 ## 结论：生产环境选用 improved-v2
 

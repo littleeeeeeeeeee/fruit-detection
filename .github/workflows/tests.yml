@@ -53,6 +53,9 @@ jobs:
       - name: Install Playwright Chromium
         run: python -m playwright install --with-deps chromium
 
+      - name: Lint / static analysis
+        run: python -m ruff check app tests ml
+
       - name: Unit tests
         run: |
           mkdir -p reports
@@ -74,6 +77,27 @@ jobs:
           name: test-reports
           path: reports/
           if-no-files-found: ignore
+
+  docker-build:
+    name: Build Docker image
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: fruit-detection:ci
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,mode=max,scope=image
 
   publish:
     name: Publish image to Docker Hub
@@ -126,14 +150,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Generate staging.env from environment variables
+      - name: Generate staging.env from environment secrets
         env:
-          # 非敏感配置放 Environment variables，workflow 用 vars.* 读取；
-          # 敏感值（token/密码）才放 Environment secrets，用 secrets.* 读取。
-          STAGING_MODEL_PATH: ${{ vars.STAGING_MODEL_PATH }}
-          STAGING_CONF_THRESHOLD: ${{ vars.STAGING_CONF_THRESHOLD }}
-          STAGING_IOU_THRESHOLD: ${{ vars.STAGING_IOU_THRESHOLD }}
-          STAGING_MAX_IMAGE_MB: ${{ vars.STAGING_MAX_IMAGE_MB }}
+          # 部署配置按项目要求放在 environment secrets，用 secrets.* 读取。
+          STAGING_MODEL_PATH: ${{ secrets.STAGING_MODEL_PATH }}
+          STAGING_CONF_THRESHOLD: ${{ secrets.STAGING_CONF_THRESHOLD }}
+          STAGING_IOU_THRESHOLD: ${{ secrets.STAGING_IOU_THRESHOLD }}
+          STAGING_MAX_IMAGE_MB: ${{ secrets.STAGING_MAX_IMAGE_MB }}
         run: |
           cat > staging.env <<EOF
           APP_ENV=staging
@@ -191,13 +214,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Generate production.env from environment variables
+      - name: Generate production.env from environment secrets
         env:
-          # 非敏感配置放 Environment variables；敏感值才用 secrets.*
-          PRODUCTION_MODEL_PATH: ${{ vars.PRODUCTION_MODEL_PATH }}
-          PRODUCTION_CONF_THRESHOLD: ${{ vars.PRODUCTION_CONF_THRESHOLD }}
-          PRODUCTION_IOU_THRESHOLD: ${{ vars.PRODUCTION_IOU_THRESHOLD }}
-          PRODUCTION_MAX_IMAGE_MB: ${{ vars.PRODUCTION_MAX_IMAGE_MB }}
+          # 部署配置按项目要求放在 environment secrets，用 secrets.* 读取。
+          PRODUCTION_MODEL_PATH: ${{ secrets.PRODUCTION_MODEL_PATH }}
+          PRODUCTION_CONF_THRESHOLD: ${{ secrets.PRODUCTION_CONF_THRESHOLD }}
+          PRODUCTION_IOU_THRESHOLD: ${{ secrets.PRODUCTION_IOU_THRESHOLD }}
+          PRODUCTION_MAX_IMAGE_MB: ${{ secrets.PRODUCTION_MAX_IMAGE_MB }}
         run: |
           cat > production.env <<EOF
           APP_ENV=production
