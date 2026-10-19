@@ -126,12 +126,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Generate staging.env from environment secrets
+      - name: Generate staging.env from environment variables
         env:
-          STAGING_MODEL_PATH: ${{ secrets.STAGING_MODEL_PATH }}
-          STAGING_CONF_THRESHOLD: ${{ secrets.STAGING_CONF_THRESHOLD }}
-          STAGING_IOU_THRESHOLD: ${{ secrets.STAGING_IOU_THRESHOLD }}
-          STAGING_MAX_IMAGE_MB: ${{ secrets.STAGING_MAX_IMAGE_MB }}
+          # 非敏感配置放 Environment variables，workflow 用 vars.* 读取；
+          # 敏感值（token/密码）才放 Environment secrets，用 secrets.* 读取。
+          STAGING_MODEL_PATH: ${{ vars.STAGING_MODEL_PATH }}
+          STAGING_CONF_THRESHOLD: ${{ vars.STAGING_CONF_THRESHOLD }}
+          STAGING_IOU_THRESHOLD: ${{ vars.STAGING_IOU_THRESHOLD }}
+          STAGING_MAX_IMAGE_MB: ${{ vars.STAGING_MAX_IMAGE_MB }}
         run: |
           cat > staging.env <<EOF
           APP_ENV=staging
@@ -189,12 +191,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Generate production.env from environment secrets
+      - name: Generate production.env from environment variables
         env:
-          PRODUCTION_MODEL_PATH: ${{ secrets.PRODUCTION_MODEL_PATH }}
-          PRODUCTION_CONF_THRESHOLD: ${{ secrets.PRODUCTION_CONF_THRESHOLD }}
-          PRODUCTION_IOU_THRESHOLD: ${{ secrets.PRODUCTION_IOU_THRESHOLD }}
-          PRODUCTION_MAX_IMAGE_MB: ${{ secrets.PRODUCTION_MAX_IMAGE_MB }}
+          # 非敏感配置放 Environment variables；敏感值才用 secrets.*
+          PRODUCTION_MODEL_PATH: ${{ vars.PRODUCTION_MODEL_PATH }}
+          PRODUCTION_CONF_THRESHOLD: ${{ vars.PRODUCTION_CONF_THRESHOLD }}
+          PRODUCTION_IOU_THRESHOLD: ${{ vars.PRODUCTION_IOU_THRESHOLD }}
+          PRODUCTION_MAX_IMAGE_MB: ${{ vars.PRODUCTION_MAX_IMAGE_MB }}
         run: |
           cat > production.env <<EOF
           APP_ENV=production
