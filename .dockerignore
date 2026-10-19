@@ -1,0 +1,44 @@
+# 版本控制 / IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+.dvc/
+.dvcignore
+
+# 本地 Python 环境（宿主机专用，镜像内重新安装）
+.venv/
+.projenv/
+venv/
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 数据集由 DVC 管理，运行时不需要
+yolo_fruit_data/
+fruit_data/
+weights/
+_removed/
+
+# 训练产物与实验记录
+runs/
+mlruns/
+mlflow.db
+*.db
+*.sqlite
+*.log
+
+# 测试、训练脚本与文档不打进运行时镜像
+tests/
+ml/
+fruit_ob.py
+xml_to_text.py
+*.md
+
+# 其他
+*.zip
+Dockerfile
+.dockerignore
+.env

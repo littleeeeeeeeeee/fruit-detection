@@ -1,0 +1,235 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [main, dev, staging]
+  push:
+    branches:
+      - main
+      - staging
+      - dev
+      - "feature/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  IMAGE_NAME: snakeskinbag/fruit-detection
+
+jobs:
+  tests:
+    name: Unit / integration / API / e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install OpenCV system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1
+          sudo apt-get install -y libglib2.0-0t64 || sudo apt-get install -y libglib2.0-0
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # CPU 版 torch：避免 CI 下载数 GB 的 CUDA 依赖
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-dev.txt
+
+      - name: Install Playwright Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Unit tests
+        run: |
+          mkdir -p reports
+          pytest tests/unit -v --junitxml=reports/unit.xml
+
+      - name: Integration tests
+        run: pytest tests/integration -v --junitxml=reports/integration.xml
+
+      - name: API tests
+        run: pytest tests/api -v --junitxml=reports/api.xml
+
+      - name: E2E tests
+        run: pytest tests/e2e -v --junitxml=reports/e2e.xml
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: reports/
+          if-no-files-found: ignore
+
+  publish:
+    name: Publish image to Docker Hub
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,mode=max,scope=image
+
+  deploy-staging:
+    name: Build & smoke-test staging
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate staging.env from environment variables
+        env:
+          # 非敏感配置放 Environment variables，workflow 用 vars.* 读取；
+          # 敏感值（token/密码）才放 Environment secrets，用 secrets.* 读取。
+          STAGING_MODEL_PATH: ${{ vars.STAGING_MODEL_PATH }}
+          STAGING_CONF_THRESHOLD: ${{ vars.STAGING_CONF_THRESHOLD }}
+          STAGING_IOU_THRESHOLD: ${{ vars.STAGING_IOU_THRESHOLD }}
+          STAGING_MAX_IMAGE_MB: ${{ vars.STAGING_MAX_IMAGE_MB }}
+        run: |
+          cat > staging.env <<EOF
+          APP_ENV=staging
+          MODEL_PATH=${STAGING_MODEL_PATH:-/app/models/best.pt}
+          CONF_THRESHOLD=${STAGING_CONF_THRESHOLD:-0.25}
+          IOU_THRESHOLD=${STAGING_IOU_THRESHOLD:-0.7}
+          MAX_IMAGE_MB=${STAGING_MAX_IMAGE_MB:-10}
+          EOF
+
+      - name: Build and push staging image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:staging
+            ${{ env.IMAGE_NAME }}:staging-${{ github.sha }}
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,mode=max,scope=image
+
+      - name: Smoke test staging image
+        run: |
+          docker run -d --name fruit-staging --env-file staging.env -p 8000:8000 \
+            ${{ env.IMAGE_NAME }}:staging
+          trap 'docker rm -f fruit-staging' EXIT
+          ready=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/api/health; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "${ready}" = "1"
+          curl -fsS -F "file=@tests/fixtures/sample.jpg" http://127.0.0.1:8000/api/detect
+
+  deploy-production:
+    name: Build & smoke-test production
+    needs: [tests, publish]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate production.env from environment variables
+        env:
+          # 非敏感配置放 Environment variables；敏感值才用 secrets.*
+          PRODUCTION_MODEL_PATH: ${{ vars.PRODUCTION_MODEL_PATH }}
+          PRODUCTION_CONF_THRESHOLD: ${{ vars.PRODUCTION_CONF_THRESHOLD }}
+          PRODUCTION_IOU_THRESHOLD: ${{ vars.PRODUCTION_IOU_THRESHOLD }}
+          PRODUCTION_MAX_IMAGE_MB: ${{ vars.PRODUCTION_MAX_IMAGE_MB }}
+        run: |
+          cat > production.env <<EOF
+          APP_ENV=production
+          MODEL_PATH=${PRODUCTION_MODEL_PATH:-/app/models/best.pt}
+          CONF_THRESHOLD=${PRODUCTION_CONF_THRESHOLD:-0.25}
+          IOU_THRESHOLD=${PRODUCTION_IOU_THRESHOLD:-0.7}
+          MAX_IMAGE_MB=${PRODUCTION_MAX_IMAGE_MB:-10}
+          EOF
+
+      - name: Build and push production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:production
+            ${{ env.IMAGE_NAME }}:production-${{ github.sha }}
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,mode=max,scope=image
+
+      - name: Smoke test production image
+        run: |
+          docker run -d --name fruit-production --env-file production.env -p 8000:8000 \
+            ${{ env.IMAGE_NAME }}:production
+          trap 'docker rm -f fruit-production' EXIT
+          ready=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/api/health; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "${ready}" = "1"
+          curl -fsS -F "file=@tests/fixtures/sample.jpg" http://127.0.0.1:8000/api/detect

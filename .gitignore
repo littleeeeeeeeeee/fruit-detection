@@ -8,6 +8,14 @@ venv/
 # IDE
 .idea/
 
+# 测试缓存与覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+reports/
+staging.env
+production.env
+
 # 训练产物
 runs/
 mlruns/
@@ -27,5 +35,4 @@ fruit_data/
 .env
 *.db
 *.sqlite
-yolo_fruit_data/_removed/
 yolo_fruit_data/_removed/
