@@ -125,7 +125,8 @@ Environments：
 - `staging`：`STAGING_MODEL_PATH`、`STAGING_CONF_THRESHOLD`、`STAGING_IOU_THRESHOLD`、`STAGING_MAX_IMAGE_MB`
 - `production`：`PRODUCTION_MODEL_PATH`、`PRODUCTION_CONF_THRESHOLD`、`PRODUCTION_IOU_THRESHOLD`、`PRODUCTION_MAX_IMAGE_MB`
 
-这些部署配置以 **environment secrets** 形式保存，workflow 用 `secrets.*` 读取。
+这些部署配置以 **environment variables** 形式保存（属于非敏感配置），workflow 用 `vars.*` 读取；
+Docker Hub 凭据则放在 repository secrets 中，workflow 用 `secrets.*` 读取。
 
 ## 仓库结构
 
