@@ -152,5 +152,4 @@ Environments：
 ## 已知限制
 
 - 验证集仅 32 张，单张样本对指标影响较大；生产选型解释见 `ml/README_experiments.md`。
-- `xml_to_text.py` 里的 `RAW_DATA_DIR` / `OUTPUT_DIR` 仍是原开发机路径，重新做 XML → YOLO 转换前需改成本机路径（`data.yaml` 已改为按自身位置解析，不再受影响）。
 - 原始 `fruit_data/` 不进入 Git；DVC 需要 `.dvc/config.local` 中的 Azure SAS token 才能 `dvc pull`。

@@ -32,9 +32,9 @@
 | val | 32 | 32 |
 | test | 60 | 60 |
 
-> 注意：`xml_to_text.py` 中的 `RAW_DATA_DIR` / `OUTPUT_DIR` 仍是原开发机的绝对路径
-> （`C:\Users\21555\...`），在新机器上重新转换前需要改成当前路径，或直接使用 DVC 中已版本化的结果。
-> 这是当前仓库已知的可复现性缺口。
+> 脚本中的 `RAW_DATA_DIR` / `OUTPUT_DIR` 以脚本自身位置为基准，分别指向仓库根目录下的
+> `fruit_data/` 和 `yolo_fruit_data/`，clone 到任何路径都不用改；生成的 `data.yaml` 只写
+> 相对的 split 路径。原始数据不在 Git 中，需要本地放置 `fruit_data/`，或直接使用 DVC 中已版本化的结果。
 
 ## 3. 数据版本（DVC）
 
@@ -118,5 +118,4 @@ python ml/train.py --mode eval
 ## 7. 已知问题
 
 - 原始数据没有公开来源 URL / 许可证记录；
-- XML 转换脚本 `xml_to_text.py` 仍有旧机器绝对路径；
 - labels 指针包含 260 个文件，比 images 的 258 个多 2 个，可能是历史遗留标签文件；训练时以图片配对为准。
