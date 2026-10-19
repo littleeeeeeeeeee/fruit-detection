@@ -4,7 +4,8 @@
 
 水果目标检测数据集，共 3 个类别：apple、banana、orange。
 图像为真实拍摄的水果照片，标注格式为 YOLO（每张图片对应一个 `.txt`，每行 `class cx cy w h`，坐标已归一化）。
-原始数据与 XML 标注保存在 `fruit_data/`，转换脚本为 `ml/data_pipeline.py`，转换后生成 YOLO 格式的 `yolo_fruit_data/`。
+原始数据与 XML 标注保存在 `fruit_data/`（300 张 JPEG + 300 个 Pascal VOC XML），转换脚本为项目根目录的 `xml_to_text.py`，转换后生成 YOLO 格式的 `yolo_fruit_data/`。
+原始数据不在 Git 中；数据来源在交接材料中没有公开 URL/许可证记录，详见 `ml/PROVENANCE.md`。
 
 ## 版本管理方式
 
