@@ -1,4 +1,6 @@
-path: C:/Users/21555/PycharmProjects/pythonProject/yolo_fruit_data
+# 数据集根目录由本文件所在目录决定，不写死绝对路径。
+# ultralytics 读取 data.yaml 时，若没有 path 键就用 yaml 自身的父目录作为根，
+# 因此仓库 clone 到任何路径、CI 上任意工作目录都能直接用。
 train: images/train
 val: images/val
 test: images/test

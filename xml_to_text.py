@@ -5,9 +5,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from PIL import Image
 
-RAW_DATA_DIR = r"C:\Users\21555\PycharmProjects\pythonProject\fruit data"
+BASE_DIR = Path(__file__).resolve().parent
+RAW_DATA_DIR = BASE_DIR / "fruit_data"
 CLASSES = ["apple", "banana", "orange"]
-OUTPUT_DIR = r"C:\Users\21555\PycharmProjects\pythonProject\yolo_fruit data"
+OUTPUT_DIR = BASE_DIR / "yolo_fruit_data"
 
 def convert_xml_to_yolo(xml_path, img_path, classes):
     """单个 XML 转 YOLO TXT 内容，如果 XML 尺寸为 0，从图片读取"""
@@ -187,9 +188,9 @@ def main():
     # 9. 生成 data.yaml
     print("\n📝 生成 data.yaml...")
     yaml_content = f"""# YOLO 数据集配置文件
-train: {output_dir / 'images' / 'train'}
-val: {output_dir / 'images' / 'val'}
-test: {output_dir / 'images' / 'test'}
+train: images/train
+val: images/val
+test: images/test
 
 nc: {len(CLASSES)}
 names: {CLASSES}
