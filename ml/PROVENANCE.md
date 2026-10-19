@@ -112,12 +112,11 @@ python ml/train.py --mode train --epochs 100 --dataset-version v2
 python ml/train.py --mode eval
 ```
 
-> `yolo_fruit_data/data.yaml` 里的 `path` 仍是原机器绝对路径
-> `C:/Users/21555/PycharmProjects/pythonProject/yolo_fruit_data`。跨机器训练前需要
-> 把 `path` 改成当前机器上 `yolo_fruit_data` 的绝对路径，否则 YOLO 会找不到图片。
+> `yolo_fruit_data/data.yaml` 不再写 `path`，YOLO 会以该文件所在目录作为数据集根，
+> 因此仓库 clone 到任意路径都能直接训练；只有早期脚本 `xml_to_text.py` 仍保留旧机器绝对路径。
 
 ## 7. 已知问题
 
 - 原始数据没有公开来源 URL / 许可证记录；
-- XML 转换脚本和 `data.yaml` 仍有旧机器绝对路径；
+- XML 转换脚本 `xml_to_text.py` 仍有旧机器绝对路径；
 - labels 指针包含 260 个文件，比 images 的 258 个多 2 个，可能是历史遗留标签文件；训练时以图片配对为准。
