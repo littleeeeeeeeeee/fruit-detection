@@ -1,3 +1,9 @@
+# CI/CD 设计说明：
+# - 同一个 workflow 按分支/事件条件执行不同阶段，避免维护多份 YAML；
+# - PR 阶段跑 lint + 四组测试 + Docker build（不 push），尽早暴露问题；
+# - push staging 额外 build/push staging 镜像并 smoke test；
+# - push main 额外 publish latest/sha，并 build/push production 镜像 + smoke test；
+# - 部署配置来自 GitHub Environment secrets，env 文件只在 runner 生成，不提交仓库。
 name: CI/CD
 
 on:
@@ -23,6 +29,7 @@ env:
   IMAGE_NAME: snakeskinbag/fruit-detection
 
 jobs:
+  # 测试作业：lint 先于测试，任何一步失败都会让整个 run 变红。
   tests:
     name: Unit / integration / API / e2e
     runs-on: ubuntu-latest
@@ -78,6 +85,7 @@ jobs:
           path: reports/
           if-no-files-found: ignore
 
+  # 独立构建校验：只 build 不 push，验证 Dockerfile 在 PR 阶段可用。
   docker-build:
     name: Build Docker image
     needs: tests
@@ -99,6 +107,7 @@ jobs:
           cache-from: type=gha,scope=image
           cache-to: type=gha,mode=max,scope=image
 
+  # main 的发布：:latest 方便演示，:<sha> 用于回滚/追溯。
   publish:
     name: Publish image to Docker Hub
     needs: tests
@@ -129,6 +138,7 @@ jobs:
           cache-from: type=gha,scope=image
           cache-to: type=gha,mode=max,scope=image
 
+  # staging：environment secrets -> env 文件 -> build/push -> 容器 smoke test。
   deploy-staging:
     name: Build & smoke-test staging
     needs: tests
@@ -193,6 +203,7 @@ jobs:
           test "${ready}" = "1"
           curl -fsS -F "file=@tests/fixtures/sample.jpg" http://127.0.0.1:8000/api/detect
 
+  # production：依赖 publish（latest/sha 已推），再构建 production tag 并 smoke test。
   deploy-production:
     name: Build & smoke-test production
     needs: [tests, publish]

@@ -5,10 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>水果检测</title>
 <style>
+  /* 页面保持轻量：没有前端框架，所有交互用原生 fetch + DOM API。
+     这样镜像不需要 Node 构建步骤，静态文件直接由 FastAPI 提供。 */
   body { font-family: system-ui, sans-serif; max-width: 860px; margin: 0 auto; padding: 24px; }
   h2 { margin-top: 32px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
   .row { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
   button { padding: 6px 14px; cursor: pointer; }
+
+  /* .stage 是图片容器，.overlay 绝对定位盖在图片上。
+     框的 left/top/width/height 由 JS 根据图片真实像素换算成百分比，
+     所以浏览器缩放时框仍能对齐。 */
   .stage { position: relative; display: inline-block; max-width: 100%; margin-top: 8px; }
   .stage img { max-width: 100%; display: block; border-radius: 6px; }
   .overlay { position: absolute; inset: 0; }
@@ -22,6 +28,8 @@
 <body>
 <h1>水果检测</h1>
 
+<!-- 单图区域：input#single 选文件，button#singleBtn 触发，span#singleMsg 显示状态。
+     #stage/#preview/#overlay 初始 hidden，只有识别成功后才显示。 -->
 <h2>单张图片</h2>
 <div class="row">
   <input type="file" id="single" accept="image/*">
@@ -34,6 +42,8 @@
 </div>
 <ul id="singleList"></ul>
 
+<!-- 批量区域：input#batch 带 multiple；结果是一个嵌套列表，
+     外层 li 对应每张图，内层 li 对应每个检测框。 -->
 <h2>批量图片</h2>
 <div class="row">
   <input type="file" id="batch" accept="image/*" multiple>
@@ -43,8 +53,24 @@
 <ul id="batchList"></ul>
 
 <script>
+// 小工具：按 id 取 DOM。页面元素很少，不需要引入 jQuery/Vue。
 const $ = (id) => document.getElementById(id);
 
+/**
+ * 把后端返回的绝对像素框转成 CSS 百分比，生成一个带标签的 div。
+ *
+ * @param {{class_name: string, confidence: number, box: number[]}} d 单个检测
+ * @param {number} w 图片 naturalWidth（原始像素宽）
+ * @param {number} h 图片 naturalHeight（原始像素高）
+ * @returns {string} 可直接塞进 #overlay.innerHTML 的 HTML 字符串
+ *
+ * 注意：
+ * - 必须用 naturalWidth/naturalHeight，而不是 clientWidth/clientHeight；
+ *   后者是 CSS 显示尺寸，和模型坐标不在同一坐标系。
+ * - 后端 confidence 是 0..1，这里乘 100 显示百分比。
+ * - class_name 来自模型固定类别，不含用户输入；如果未来支持自定义类别，
+ *   需要做 HTML 转义，避免 XSS。
+ */
 function boxHtml(d, w, h) {
   const [x1, y1, x2, y2] = d.box;
   const style = `left:${x1 / w * 100}%;top:${y1 / h * 100}%;` +
@@ -54,24 +80,38 @@ function boxHtml(d, w, h) {
           </div>`;
 }
 
+// 单图识别：点击 -> 校验文件 -> POST multipart -> 画框 + 列表。
 $('singleBtn').onclick = async () => {
   const f = $('single').files[0];
   if (!f) { $('singleMsg').textContent = '请先选择图片'; return; }
+
   $('singleMsg').textContent = '识别中…';
+
+  // FormData 的字段名必须和后端 FastAPI 的 file: UploadFile = File(...) 一致。
   const fd = new FormData();
   fd.append('file', f);
+
+  // 没有 try/catch：网络错误时 Promise reject，浏览器控制台会显示；
+  // 当前课堂演示场景可以接受，生产应加统一错误提示。
   const res = await fetch('/api/detect', { method: 'POST', body: fd });
   const data = await res.json();
   if (!res.ok) { $('singleMsg').textContent = data.detail || '识别失败'; return; }
 
   $('singleMsg').textContent = `${data.count} 个目标，耗时 ${data.elapsed_ms} ms`;
+
+  // createObjectURL 让浏览器直接显示本地选中的文件，不需要先上传再下载。
   const img = $('preview');
   img.src = URL.createObjectURL(f);
   $('stage').hidden = false;
+
+  // 必须等图片 load 完才能拿到 naturalWidth/naturalHeight；
+  // 否则在部分浏览器上读到 0，框的百分比会变成 Infinity/NaN。
   img.onload = () => {
     $('overlay').innerHTML = data.detections
       .map((d) => boxHtml(d, img.naturalWidth, img.naturalHeight)).join('');
   };
+
+  // 文本列表与画框是两套展示，方便老师/用户直接读数值。
   $('singleList').innerHTML = data.detections.length
     ? data.detections.map((d) =>
         `<li>${d.class_name} — 置信度 ${(d.confidence * 100).toFixed(1)}% — ` +
@@ -79,17 +119,23 @@ $('singleBtn').onclick = async () => {
     : '<li>未检测到目标</li>';
 };
 
+// 批量识别：把所有文件以同名 files 字段追加，后端用 list[UploadFile] 接收。
 $('batchBtn').onclick = async () => {
   const files = $('batch').files;
   if (!files.length) { $('batchMsg').textContent = '请先选择图片'; return; }
+
   $('batchMsg').textContent = `正在识别 ${files.length} 张…`;
+
   const fd = new FormData();
   for (const f of files) fd.append('files', f);
+
   const res = await fetch('/api/detect/batch', { method: 'POST', body: fd });
   const data = await res.json();
   if (!res.ok) { $('batchMsg').textContent = data.detail || '识别失败'; return; }
 
   $('batchMsg').textContent = `${data.total_images} 张图片，共 ${data.total_detections} 个目标`;
+
+  // 外层 li：一张图；内层 ul/li：该图的检测结果。
   $('batchList').innerHTML = data.results.map((r) => {
     const items = r.detections.length
       ? r.detections.map((d) =>
